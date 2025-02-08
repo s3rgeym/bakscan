@@ -100,11 +100,7 @@ func CreateHTTPClient(connectTimeout, readHeaderTimeout time.Duration, skipVerif
 func isForceHTTPSRedirect(prevReq, newReq *http.Request) bool {
 	prevURL := prevReq.URL
 	newURL := newReq.URL
-	return (prevURL.Scheme == "http" &&
-		newURL.Scheme == "https" &&
-		prevURL.Host == newURL.Host &&
-		prevURL.Path == newURL.Path &&
-		prevURL.RawQuery == newURL.RawQuery)
+	return prevURL.Scheme == "http" && newURL.Scheme == "https" && prevURL.Host == newURL.Host && prevURL.Path == newURL.Path && prevURL.RawQuery == newURL.RawQuery
 }
 
 func Fetch(ctx context.Context, client *http.Client, url, userAgent string) (*http.Response, error) {
