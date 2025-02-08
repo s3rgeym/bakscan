@@ -71,7 +71,7 @@ func main() {
 		"\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|",
 	}
 
-	l.Println("\033[32m" + strings.Join(banner, "\n") + "\033[0m")
+	l.Println("\033[36m" + strings.Join(banner, "\n") + "\033[0m")
 
 	l.Println("\033[33mStarting scanning...\033[0m")
 
