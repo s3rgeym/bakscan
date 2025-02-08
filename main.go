@@ -217,7 +217,7 @@ func main() {
 
 				content := buf[:n]
 				if htmlRegexp.MatchString(string(content)) {
-					l.Printf("\033[31mFound HTML in response: %s\033[0m\n", fileURL)
+					l.Printf("\033[31mFound HTML: %s\033[0m\n", fileURL)
 					return
 				}
 
