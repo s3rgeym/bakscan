@@ -184,9 +184,11 @@ func main() {
 	l.Printf("\033[35mTotal saved: %d\033[0m\n", counter)
 }
 
+// Кое-что я подсмотрел тут:
 // https://support.plesk.com/hc/en-us/articles/12377082525719-Site-traffic-suddenly-increased
+// Что-то мне подсказал ChatGPT, остальное придумал я.
 func generateSensitiveFiles(domainName string) []string {
-	commonFiles := []string{
+	baseFiles := []string{
 		".aws/credentials",
 		".bash_history",
 		".bashrc",
@@ -270,7 +272,7 @@ func generateSensitiveFiles(domainName string) []string {
 	logSuffixes := []string{".log", "_log"}
 
 	return common.Extend(
-		commonFiles,
+		baseFiles,
 		common.GenerateCombinations(phpConfigs, backupSuffixes),
 		common.GenerateCombinations(archiveNames, archiveExtensions),
 		common.GenerateCombinations(sqlDumpNames, sqlDumpExtensions),
