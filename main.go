@@ -65,7 +65,8 @@ func main() {
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
 	mu := &sync.Mutex{}
-	var counter int64
+	var fetchedCount int64
+	var savedCount int64
 
 	banner := []string{
 		"______       _    _____                 ",
@@ -76,7 +77,7 @@ func main() {
 		"\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|",
 	}
 
-	l.Println("\033[36m" + strings.Join(banner, "\n") + "\033[0m")
+	l.Println("\033[32m" + strings.Join(banner, "\n") + "\033[0m")
 
 	l.Println("\033[33mStarting scanning...\033[0m")
 
@@ -106,7 +107,7 @@ func main() {
 				defer cancel()
 
 				userAgent := common.GenerateRandomUserAgent()
-				l.Printf("\033[34mFetch %s: %s\033[0m\n", fileURL, userAgent)
+				l.Printf("\033[90m%s => %s\033[0m\n", fileURL, userAgent)
 
 				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
@@ -114,6 +115,8 @@ func main() {
 					return
 				}
 				defer resp.Body.Close()
+
+				atomic.AddInt64(&fetchedCount, 1)
 
 				if resp.StatusCode != http.StatusOK {
 					l.Printf("\033[31m%d - %s\033[0m\n", resp.StatusCode, fileURL)
@@ -175,7 +178,7 @@ func main() {
 				}
 
 				l.Printf("\033[32mSaved: %s\033[0m\n", filePath)
-				atomic.AddInt64(&counter, 1)
+				atomic.AddInt64(&savedCount, 1)
 			}(fileURL)
 		}
 	}
@@ -183,7 +186,8 @@ func main() {
 	wg.Wait()
 	close(sem)
 	l.Println("\033[33mScanning finished!\033[0m")
-	l.Printf("\033[35mTotal saved: %d\033[0m\n", counter)
+	l.Printf("\033[34mFetched URLs: %d\033[0m\n", fetchedCount)
+	l.Printf("\033[34mSaved files: %d\033[0m\n", savedCount)
 }
 
 // Кое-что я подсмотрел тут:
@@ -198,10 +202,6 @@ func generateSensitiveFiles(domainName string) []string {
 		".config/gcloud/credentials.json",
 		".config/openvpn/auth.txt",
 		".DS_Store",
-		".env.dev",
-		".env.prod",
-		".env.test",
-		".env",
 		".git-credentials",
 		".git/config",
 		".gitconfig",
@@ -218,12 +218,6 @@ func generateSensitiveFiles(domainName string) []string {
 		".vscode/sftp.json",
 		".zsh_history",
 		".zshrc",
-		"docker-compose.yaml",
-		"docker-compose.yml",
-		"Dockerfile.dev",
-		"Dockerfile.prod",
-		"Dockerfile.test",
-		"Dockerfile",
 	}
 
 	phpConfigs := []string{
@@ -244,6 +238,7 @@ func generateSensitiveFiles(domainName string) []string {
 	archiveNames := []string{
 		"archive",
 		"backup",
+		"docroot",
 		"files",
 		"home",
 		"httpdocs",
@@ -252,10 +247,11 @@ func generateSensitiveFiles(domainName string) []string {
 		"site",
 		"web",
 		"www",
-		"wwwroot",
+		//"wwwroot",
 		domainName,
 	}
-	archiveExtensions := []string{".rar", ".tar.gz", ".tar.xz", ".tgz", ".zip"}
+
+	archiveExtensions := []string{".rar", ".tar.gz", ".tgz", ".zip"}
 
 	sqlDumpNames := []string{
 		"backup",
@@ -268,7 +264,11 @@ func generateSensitiveFiles(domainName string) []string {
 	}
 
 	sqlDumpExtensions := []string{".sql"}
-
+	envSuffixes := []string{"", ".prod", ".dev"}
+	dockerPrefixes := []string{"", "docker/"}
+	dockerFiles := []string{"Dockerfile", ".env"}
+	composeFiles := []string{"docker-compose"}
+	yamlExtensions := []string{".yml", ".yaml"}
 	logPrefixes := []string{"", "logs/"}
 	logNames := []string{"error", "debug"}
 	logSuffixes := []string{".log", "_log"}
@@ -278,6 +278,8 @@ func generateSensitiveFiles(domainName string) []string {
 		common.GenerateCombinations(phpConfigs, backupSuffixes),
 		common.GenerateCombinations(archiveNames, archiveExtensions),
 		common.GenerateCombinations(sqlDumpNames, sqlDumpExtensions),
+		common.GenerateCombinations(dockerPrefixes, dockerFiles, envSuffixes),
+		common.GenerateCombinations(dockerPrefixes, composeFiles, envSuffixes, yamlExtensions),
 		common.GenerateCombinations(logPrefixes, logNames, logSuffixes),
 	)
 }
