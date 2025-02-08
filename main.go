@@ -189,7 +189,7 @@ func main() {
 				}
 
 				userAgent := generateRandomUserAgent()
-				l.Printf("\033[90m%q => %q\033[0m\n", fileURL, userAgent)
+				l.Printf("\033[37m%q => %q\033[0m\n", fileURL, userAgent)
 
 				resp, err := fetch(client, fileURL, userAgent)
 				if err != nil {
@@ -212,7 +212,7 @@ func main() {
 
 				data := buf[:n]
 				if htmlRegexp.MatchString(string(data)) {
-					l.Printf("\033[32mFound HTML in response: %s\033[0m\n", fileURL)
+					l.Printf("\033[31mFound HTML in response: %s\033[0m\n", fileURL)
 					return
 				}
 
