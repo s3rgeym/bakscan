@@ -134,8 +134,9 @@ var (
 func main() {
 	flag.StringVar(&inputFile, "i", "-", "Input file")
 	flag.StringVar(&outputDir, "o", "./output", "Output directory to found files")
-	flag.IntVar(&threads, "t", 50, "Number of threads")
-	flag.DurationVar(&timeout, "T", 10*time.Second, "Timeout for each request")
+	flag.IntVar(&threads, "t", 200, "Number of threads")
+	// 45 секунд примерно потребуется на скачивание файла размером 5 ГиБ со скоростью 1000 МБит/с
+	flag.DurationVar(&timeout, "T", 45*time.Second, "Timeout for each request")
 	flag.BoolVar(&skipVerify, "k", false, "Skip SSL verification")
 	flag.StringVar(&proxyURL, "p", "", "Proxy URL")
 	flag.Parse()
@@ -192,7 +193,7 @@ func main() {
 
 				resp, err := fetch(client, fileURL, userAgent)
 				if err != nil {
-					l.Printf("\033[31mError fetching URL %q: %v\033[0m\n", fileURL, err)
+					l.Printf("\033[31mError fetching URL: %v\033[0m\n", err)
 					return
 				}
 				defer resp.Body.Close()
@@ -205,7 +206,7 @@ func main() {
 				buf := make([]byte, 4096)
 				n, err := resp.Body.Read(buf)
 				if err != nil && err != io.EOF {
-					l.Printf("\033[31mError reading response body for URL %s: %v\033[0m\n", fileURL, err)
+					l.Printf("\033[31mReading error: %v\033[0m\n", err)
 					return
 				}
 
@@ -217,26 +218,26 @@ func main() {
 
 				outputPath := filepath.Join(outputDir, base.Hostname())
 				if err := os.MkdirAll(outputPath, 0o755); err != nil && !os.IsExist(err) {
-					l.Printf("\033[31mError creating output directory %q: %v\033[0m\n", outputPath, err)
+					l.Printf("\033[31mError creating directory: %v\033[0m\n", err)
 					return
 				}
 
 				filePath := filepath.Join(outputPath, path)
 				file, err := os.Create(filePath)
 				if err != nil {
-					l.Printf("\033[31mError creating file %q: %v\033[0m\n", filePath, err)
+					l.Printf("\033[31mError creating file: %v\033[0m\n", err)
 					return
 				}
 				defer file.Close()
 
 				if _, err := file.Write(data); err != nil {
-					l.Printf("\033[31mError writing to file %q: %v\033[0m\n", filePath, err)
+					l.Printf("\033[31mError writing file: %v\033[0m\n", err)
 					return
 				}
 
 				_, err = io.Copy(file, resp.Body)
 				if err != nil {
-					l.Printf("\033[31mError saving remaining response body to file %q: %v\033[0m\n", filePath, err)
+					l.Printf("\033[31mError saving remaining response body: %v\033[0m\n", err)
 				}
 
 				l.Printf("\033[32mSuccessfully saved file: %s\033[0m\n", filePath)
