@@ -230,6 +230,7 @@ func generateSensitiveFiles() []string {
 	}
 
 	backupSuffixes := []string{".bak", ".0", ".1", ".old", ".swp", "~"}
+	
 	archiveNames := []string{"archive", "backup", "files", "site", "www"}
 	archiveExtensions := []string{".rar", ".tar.gz", ".tar.xz", ".tar", ".zip"}
 
