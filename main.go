@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -22,12 +23,13 @@ import (
 var htmlRegexp = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
 
 type Config struct {
-	InputFile  string
-	OutputDir  string
-	Threads    int
-	Timeout    time.Duration
-	SkipVerify bool
-	ProxyURL   string
+	InputFile      string
+	OutputDir      string
+	Threads        int
+	ConnectTimeout time.Duration
+	Timeout        time.Duration
+	SkipVerify     bool
+	ProxyURL       string
 }
 
 func parseFlags() *Config {
@@ -35,7 +37,8 @@ func parseFlags() *Config {
 	flag.StringVar(&c.InputFile, "i", "-", "Input file")
 	flag.StringVar(&c.OutputDir, "o", "./output", "Output directory to found files")
 	flag.IntVar(&c.Threads, "t", 200, "Number of threads")
-	flag.DurationVar(&c.Timeout, "T", 30*time.Second, "Timeout for each request")
+	flag.DurationVar(&c.Timeout, "с", 10*time.Second, "Connect timeout")
+	flag.DurationVar(&c.Timeout, "T", 60*time.Second, "Timeout for entire request")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
@@ -52,7 +55,7 @@ func main() {
 		l.Fatal(err)
 	}
 
-	client, err := common.CreateHTTPClient(conf.Timeout, conf.SkipVerify, conf.ProxyURL)
+	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
 		l.Fatalf("\033[31mFailed to create HTTP client: %v\033[0m", err)
 	}
@@ -75,8 +78,6 @@ func main() {
 
 	l.Println("\033[33mStarting scanning...\033[0m")
 
-	sensetiveFiles := generateSensitiveFiles()
-
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
 		if err != nil {
@@ -84,7 +85,7 @@ func main() {
 			continue
 		}
 
-		for _, file := range sensetiveFiles {
+		for _, file := range generateSensitiveFiles(u.Hostname()) {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
 				l.Printf("\033[31mError joining URL: %v\033[0m\n", err)
@@ -102,7 +103,10 @@ func main() {
 				userAgent := common.GenerateRandomUserAgent()
 				l.Printf("\033[34m%s: %s\033[0m\n", fileURL, userAgent)
 
-				resp, err := common.Fetch(client, fileURL, userAgent)
+				ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
+				defer cancel()
+
+				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
 					l.Printf("\033[31mFetch error: %v\033[0m\n", err)
 					return
@@ -180,8 +184,9 @@ func main() {
 	l.Printf("\033[35mTotal saved: %d\033[0m\n", counter)
 }
 
-func generateSensitiveFiles() []string {
-	sensitiveFiles := []string{
+// https://support.plesk.com/hc/en-us/articles/12377082525719-Site-traffic-suddenly-increased
+func generateSensitiveFiles(domainName string) []string {
+	commonFiles := []string{
 		".aws/credentials",
 		".bash_history",
 		".bashrc",
@@ -218,38 +223,54 @@ func generateSensitiveFiles() []string {
 	}
 
 	phpConfigs := []string{
-		"config.php",
-		"wp-config.php",
 		"app/etc/env.php",
+		"bitrix/php_interface/dbconn.php",
 		"config.local.php",
+		"config.php",
 		"config/settings.inc.php",
 		"configuration.php",
 		"database.php",
 		"settings.php",
 		"sites/default/settings.php",
+		"wp-config.php",
 	}
 
-	backupSuffixes := []string{".bak", ".0", ".1", ".old", ".swp", "~"}
-	
-	archiveNames := []string{"archive", "backup", "files", "site", "www"}
-	archiveExtensions := []string{".rar", ".tar.gz", ".tar.xz", ".tar", ".zip"}
+	backupSuffixes := []string{".bak", ".1", ".old", ".swp", "~"}
+
+	archiveNames := []string{
+		"archive",
+		"backup",
+		"files",
+		"home",
+		"httpdocs",
+		"public_html",
+		"root",
+		"site",
+		"web",
+		"www",
+		"wwwroot",
+		domainName,
+	}
+	archiveExtensions := []string{".rar", ".tar.gz", ".tar.xz", ".tgz", ".zip"}
 
 	sqlDumpNames := []string{
+		"backup",
 		"database",
 		"db_dump",
 		"db_export",
 		"db",
 		"dump",
+		domainName,
 	}
 
-	sqlDumpExtensions := []string{".sql", ".sql.gz"}
+	sqlDumpExtensions := []string{".sql"}
 
 	logPrefixes := []string{"", "logs/"}
 	logNames := []string{"error", "debug"}
 	logSuffixes := []string{".log", "_log"}
 
 	return common.Extend(
-		sensitiveFiles,
+		commonFiles,
 		common.GenerateCombinations(phpConfigs, backupSuffixes),
 		common.GenerateCombinations(archiveNames, archiveExtensions),
 		common.GenerateCombinations(sqlDumpNames, sqlDumpExtensions),

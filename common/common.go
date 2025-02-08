@@ -2,10 +2,12 @@ package common
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,10 +52,14 @@ func JoinURL(base *url.URL, path string) (string, error) {
 	return base.ResolveReference(rel).String(), nil
 }
 
-func CreateHTTPClient(timeout time.Duration, skipVerify bool, proxyURL string) (*http.Client, error) {
+func CreateHTTPClient(connectTimeout time.Duration, skipVerify bool, proxyURL string) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
+		DialContext: (&net.Dialer{
+			Timeout: connectTimeout,
+		}).DialContext,
 	}
+
 	if proxyURL != "" {
 		proxy, err := url.Parse(proxyURL)
 		if err != nil {
@@ -61,26 +67,34 @@ func CreateHTTPClient(timeout time.Duration, skipVerify bool, proxyURL string) (
 		}
 		transport.Proxy = http.ProxyURL(proxy)
 	}
+
 	client := &http.Client{
-		Timeout:   timeout,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
+
 	return client, nil
 }
 
-func Fetch(client *http.Client, url, userAgent string) (*http.Response, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func Fetch(ctx context.Context, client *http.Client, url, userAgent string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
+
 	setDefaultHeaders(req)
 	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
-	return client.Do(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+
+	return resp, nil
 }
 
 func setDefaultHeaders(req *http.Request) {
