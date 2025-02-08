@@ -60,12 +60,13 @@ func JoinURL(base *url.URL, path string) (string, error) {
 	return base.ResolveReference(rel).String(), nil
 }
 
-func CreateHTTPClient(connectTimeout time.Duration, skipVerify bool, proxyURL string) (*http.Client, error) {
+func CreateHTTPClient(connectTimeout, readHeaderTimeout time.Duration, skipVerify bool, proxyURL string) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
 		DialContext: (&net.Dialer{
 			Timeout: connectTimeout,
 		}).DialContext,
+		ResponseHeaderTimeout: readHeaderTimeout,
 	}
 
 	if proxyURL != "" {
@@ -74,16 +75,36 @@ func CreateHTTPClient(connectTimeout time.Duration, skipVerify bool, proxyURL st
 			return nil, fmt.Errorf("invalid proxy URL: %v", err)
 		}
 		transport.Proxy = http.ProxyURL(proxy)
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
 	}
 
 	client := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) == 0 {
+				return nil
+			}
+
+			if isForceHTTPSRedirect(via[len(via)-1], req) {
+				return nil
+			}
+
 			return http.ErrUseLastResponse
 		},
 	}
 
 	return client, nil
+}
+
+func isForceHTTPSRedirect(prevReq, newReq *http.Request) bool {
+	prevURL := prevReq.URL
+	newURL := newReq.URL
+	return (prevURL.Scheme == "http" &&
+		newURL.Scheme == "https" &&
+		prevURL.Host == newURL.Host &&
+		prevURL.Path == newURL.Path &&
+		prevURL.RawQuery == newURL.RawQuery)
 }
 
 func Fetch(ctx context.Context, client *http.Client, url, userAgent string) (*http.Response, error) {

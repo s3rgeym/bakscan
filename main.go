@@ -23,13 +23,14 @@ import (
 var htmlRegexp = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
 
 type Config struct {
-	InputFile      string
-	OutputDir      string
-	Threads        int
-	ConnectTimeout time.Duration
-	Timeout        time.Duration
-	SkipVerify     bool
-	ProxyURL       string
+	InputFile         string
+	OutputDir         string
+	Threads           int
+	ConnectTimeout    time.Duration
+	ReadHeaderTimeout time.Duration
+	TotalTimeout      time.Duration
+	SkipVerify        bool
+	ProxyURL          string
 }
 
 func parseFlags() *Config {
@@ -37,8 +38,9 @@ func parseFlags() *Config {
 	flag.StringVar(&c.InputFile, "i", "-", "Input file")
 	flag.StringVar(&c.OutputDir, "o", "./output", "Output directory to found files")
 	flag.IntVar(&c.Threads, "t", 200, "Number of threads")
-	flag.DurationVar(&c.Timeout, "с", 10*time.Second, "Connect timeout")
-	flag.DurationVar(&c.Timeout, "T", 60*time.Second, "Timeout for entire request")
+	flag.DurationVar(&c.ConnectTimeout, "сt", 10*time.Second, "Connect timeout")
+	flag.DurationVar(&c.ReadHeaderTimeout, "rht", 5*time.Second, "Read header timeout")
+	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
@@ -55,7 +57,7 @@ func main() {
 		l.Fatal(err)
 	}
 
-	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.SkipVerify, conf.ProxyURL)
+	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.ReadHeaderTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
 		l.Fatalf("\033[31mFailed to create HTTP client: %v\033[0m", err)
 	}
@@ -100,7 +102,7 @@ func main() {
 					<-sem
 				}()
 
-				ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
+				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
 
 				userAgent := common.GenerateRandomUserAgent()
