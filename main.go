@@ -100,11 +100,11 @@ func main() {
 					<-sem
 				}()
 
-				userAgent := common.GenerateRandomUserAgent()
-				l.Printf("\033[34m%s: %s\033[0m\n", fileURL, userAgent)
-
 				ctx, cancel := context.WithTimeout(context.Background(), conf.Timeout)
 				defer cancel()
+
+				userAgent := common.GenerateRandomUserAgent()
+				l.Printf("\033[34mFetch %s: %s\033[0m\n", fileURL, userAgent)
 
 				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
