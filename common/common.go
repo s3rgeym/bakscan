@@ -17,20 +17,15 @@ import (
 )
 
 func ReadLines(fileName string) ([]string, error) {
-	var reader io.Reader
-
 	if fileName == "-" {
-		reader = os.Stdin
-	} else {
-		file, err := os.Open(fileName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open file: %w", err)
-		}
-		defer file.Close()
-		reader = file
+		return readLinesFromReader(os.Stdin)
 	}
-
-	return readLinesFromReader(reader)
+	file, err := os.Open(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+	return readLinesFromReader(file)
 }
 
 func readLinesFromReader(reader io.Reader) ([]string, error) {
