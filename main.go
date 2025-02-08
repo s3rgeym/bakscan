@@ -76,11 +76,11 @@ var (
 		"/configuration.php.old",
 		"/configuration.php.swp",
 		"/configuration.php~",
-		"/database.php.bak",
-		"/database.php.old",
-		"/database.php.swp",
-		"/database.php~",
-		"/database.sql",
+		"/contentbase.php.bak",
+		"/contentbase.php.old",
+		"/contentbase.php.swp",
+		"/contentbase.php~",
+		"/contentbase.sql",
 		"/db_dump.sql",
 		"/db_export.sql",
 		"/db.sql",
@@ -210,8 +210,13 @@ func main() {
 					return
 				}
 
-				data := buf[:n]
-				if htmlRegexp.MatchString(string(data)) {
+				if n <= 100 {
+					l.Printf("\033[31mFile too small: %s\033[0m\n", fileURL)
+					return
+				}
+
+				content := buf[:n]
+				if htmlRegexp.MatchString(string(content)) {
 					l.Printf("\033[31mFound HTML in response: %s\033[0m\n", fileURL)
 					return
 				}
@@ -230,7 +235,7 @@ func main() {
 				}
 				defer file.Close()
 
-				if _, err := file.Write(data); err != nil {
+				if _, err := file.Write(content); err != nil {
 					l.Printf("\033[31mError writing file: %v\033[0m\n", err)
 					return
 				}
