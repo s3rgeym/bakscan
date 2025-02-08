@@ -61,6 +61,18 @@ func main() {
 	sem := make(chan struct{}, conf.Threads)
 	mu := &sync.Mutex{}
 	var counter int64
+
+	banner := []string{
+		"______       _    _____                 ",
+		"| ___ \\     | |  /  ___|                ",
+		"| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ",
+		"| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ",
+		"| |_/ | (_| |   </\\__/ | (_| (_| | | | |",
+		"\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|",
+	}
+
+	l.Println("\033[32m" + strings.Join(banner, "\n") + "\033[0m")
+
 	l.Println("\033[33mStarting scanning...\033[0m")
 
 	sensetiveFiles := generateSensitiveFiles()
