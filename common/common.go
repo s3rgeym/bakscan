@@ -17,29 +17,37 @@ import (
 )
 
 func ReadLines(fileName string) ([]string, error) {
-	file := os.Stdin
-	if fileName != "-" {
+	var reader io.Reader
+
+	if fileName == "-" {
+		reader = os.Stdin
+	} else {
 		file, err := os.Open(fileName)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to open file: %w", err)
 		}
 		defer file.Close()
+		reader = file
 	}
-	return readLinesFromReader(file)
+
+	return readLinesFromReader(reader)
 }
 
 func readLinesFromReader(reader io.Reader) ([]string, error) {
 	var lines []string
 	scanner := bufio.NewScanner(reader)
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" {
 			lines = append(lines, line)
 		}
 	}
+
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error reading lines: %w", err)
 	}
+
 	return lines, nil
 }
 

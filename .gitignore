@@ -1,4 +1,3 @@
-/output
 /bin
 /dist
 /pkg
@@ -6,3 +5,5 @@
 /.vscode
 /.idea
 Thumbs.db
+/output
+/urls.txt
