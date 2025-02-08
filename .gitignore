@@ -1,0 +1,8 @@
+/output
+/bin
+/dist
+/pkg
+/vendor
+/.vscode
+/.idea
+Thumbs.db
