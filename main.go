@@ -116,7 +116,7 @@ func main() {
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
 	mu := &sync.Mutex{}
-	//var fetchedCount int64
+	// var fetchedCount int64
 	var savedCount int64
 	banner := []string{
 		"______       _    _____                 ",
@@ -157,7 +157,7 @@ func main() {
 					return
 				}
 				defer resp.Body.Close()
-				//atomic.AddInt64(&fetchedCount, 1)
+				// atomic.AddInt64(&fetchedCount, 1)
 				if resp.StatusCode != http.StatusOK {
 					l.Printf(Red+"%d - %s"+Reset+"\n", resp.StatusCode, fileURL)
 					return
@@ -213,8 +213,12 @@ func main() {
 	wg.Wait()
 	close(sem)
 	l.Println(Yellow + "Scanning finished!" + Reset)
-	//l.Printf(Blue+"Fetched URLs: %d"+Reset+"\n", fetchedCount)
-	l.Printf(Blue+"Saved files: %d"+Reset+"\n", savedCount)
+	// l.Printf(Blue+"Fetched URLs: %d"+Reset+"\n", fetchedCount)
+	if savedCount > 0 {
+		l.Printf(Green+"Saved files: %d"+Reset+"\n", savedCount)
+	} else {
+		l.Println(Red + "Nothing found ;-(" + Reset)
+	}
 }
 
 func generateSensitiveFiles(domainName string) []string {
