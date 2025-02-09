@@ -92,7 +92,7 @@ func parseFlags() *Config {
 	c := &Config{}
 	flag.StringVar(&c.InputFile, "i", "-", "Input file")
 	flag.StringVar(&c.OutputDir, "o", "./output", "Output directory to found files")
-	flag.IntVar(&c.Threads, "t", 200, "Number of threads")
+	flag.IntVar(&c.Threads, "t", 100, "Number of threads")
 	flag.DurationVar(&c.ConnectTimeout, "сt", 10*time.Second, "Connect timeout")
 	flag.DurationVar(&c.ReadHeaderTimeout, "rht", 5*time.Second, "Read header timeout")
 	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
