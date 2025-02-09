@@ -77,11 +77,7 @@ func CreateHTTPClient(connectTimeout, readHeaderTimeout time.Duration, skipVerif
 	client := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) == 0 {
-				return nil
-			}
-
-			if isForceHTTPSRedirect(via[len(via)-1], req) {
+			if isHTTPtoHTTPSUpgrade(via[len(via)-1], req) {
 				return nil
 			}
 
@@ -92,7 +88,7 @@ func CreateHTTPClient(connectTimeout, readHeaderTimeout time.Duration, skipVerif
 	return client, nil
 }
 
-func isForceHTTPSRedirect(prevReq, newReq *http.Request) bool {
+func isHTTPtoHTTPSUpgrade(prevReq, newReq *http.Request) bool {
 	prevURL := prevReq.URL
 	newURL := newReq.URL
 	return prevURL.Scheme == "http" && newURL.Scheme == "https" && prevURL.Host == newURL.Host && prevURL.Path == newURL.Path && prevURL.RawQuery == newURL.RawQuery
