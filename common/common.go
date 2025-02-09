@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -173,4 +174,11 @@ var invalidPathChars = regexp.MustCompile(`[\\:*?"<>|]+`)
 
 func SanitizePath(name string) string {
 	return invalidPathChars.ReplaceAllString(name, "_")
+}
+
+func GetEOL() string {
+	if runtime.GOOS == "windows" {
+		return "\r\n"
+	}
+	return "\n"
 }

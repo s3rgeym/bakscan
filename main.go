@@ -21,8 +21,6 @@ import (
 )
 
 const (
-	NL = "\n"
-
 	// Константы для цветов
 	CSI       = "\033["
 	Reset     = CSI + "0m" // Сброс всех стилей
@@ -75,8 +73,11 @@ const (
 	BgBrightWhite   = CSI + "107m"
 )
 
-// Иногда в ответе бывают редиректы, состоящие из одного тега meta либо script
-var htmlRegexp = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
+var (
+	EOL = common.GetEOL()
+	// Иногда в ответе бывают редиректы, состоящие из одного тега meta либо script
+	htmlRegexp = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
+)
 
 type Config struct {
 	InputFile         string
@@ -85,6 +86,7 @@ type Config struct {
 	ConnectTimeout    time.Duration
 	ReadHeaderTimeout time.Duration
 	TotalTimeout      time.Duration
+	Delay             time.Duration
 	SkipVerify        bool
 	ProxyURL          string
 }
@@ -97,6 +99,7 @@ func parseFlags() *Config {
 	flag.DurationVar(&c.ConnectTimeout, "сt", 10*time.Second, "Connect timeout")
 	flag.DurationVar(&c.ReadHeaderTimeout, "rht", 5*time.Second, "Read header timeout")
 	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
+	flag.DurationVar(&c.Delay, "d", 50*time.Millisecond, "Delay beetween requests")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
@@ -110,6 +113,9 @@ func main() {
 	if err != nil {
 		l.Fatal(err)
 	}
+	if len(urls) == 0 {
+		l.Fatalln(BrightRed+"Nothing to scan."+Reset, err)
+	}
 	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.ReadHeaderTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
 		l.Fatalf(BrightRed+"Failed to create HTTP client: %v"+Reset, err)
@@ -117,8 +123,9 @@ func main() {
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
 	mu := &sync.Mutex{}
-	// var fetchedCount int64
-	var savedCount int64
+	rateLimiter := time.NewTicker(conf.Delay)
+	defer rateLimiter.Stop()
+	var counter int64
 	banner := []string{
 		"______       _    _____                 ",
 		"| ___ \\     | |  /  ___|                ",
@@ -127,8 +134,10 @@ func main() {
 		"| |_/ | (_| |   </\\__/ | (_| (_| | | | |",
 		"\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|",
 	}
-	l.Println(BrightGreen + strings.Join(banner, NL) + Reset)
-	l.Println(BrightCyan + "Starting scanning..." + Reset)
+	l.Println(BrightBlue + strings.Join(banner, EOL) + Reset)
+	l.Println("")
+	l.Println(BrightYellow + "Starting scanning..." + Reset)
+	l.Println("")
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
 		if err != nil {
@@ -136,15 +145,18 @@ func main() {
 			continue
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
-		l.Printf(BrightCyan+"Checking %d sensitive files on the site %s"+Reset+NL, len(sensitiveFiles), u)
+		l.Printf(BrightCyan+"Checking %d sensitive files on the site %s"+Reset+EOL, len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
-				l.Printf(BrightRed+"Error joining URL: %v"+Reset+NL, err)
+				l.Printf(BrightRed+"Error joining URL: %v"+Reset+EOL, err)
 				continue
 			}
 			wg.Add(1)
 			sem <- struct{}{}
+			// Nginx и прочие сервера как правило учитывают лишь время начала запроса при ограничении их количества в период времени
+			// Должен быть вне горутины или
+			<-rateLimiter.C // Ожидаем следующего запроса
 			go func(fileURL string) {
 				defer func() {
 					wg.Done()
@@ -153,31 +165,30 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
 				userAgent := common.GenerateRandomUserAgent()
-				l.Printf(BrightWhite+"%s => %s"+Reset+NL, fileURL, userAgent)
+				l.Printf(BrightWhite+"[%s] %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
 				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
-					l.Printf(BrightRed+"Fetch error: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Fetch error: %v"+Reset+EOL, err)
 					return
 				}
 				defer resp.Body.Close()
-				// atomic.AddInt64(&fetchedCount, 1)
 				if resp.StatusCode != http.StatusOK {
-					l.Printf(BrightRed+"%d - %s"+Reset+NL, resp.StatusCode, fileURL)
+					l.Printf(BrightRed+"%d - %s"+Reset+EOL, resp.StatusCode, fileURL)
 					return
 				}
 				buf := make([]byte, 4096)
 				readBytes, err := resp.Body.Read(buf)
 				if err != nil && err != io.EOF {
-					l.Printf(BrightRed+"Reading error: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Reading error: %v"+Reset+EOL, err)
 					return
 				}
 				if readBytes == 0 {
-					l.Printf(BrightRed+"Skip empty: %s"+Reset+NL, fileURL)
+					l.Printf(BrightRed+"Skip empty: %s"+Reset+EOL, fileURL)
 					return
 				}
 				content := buf[:readBytes]
 				if htmlRegexp.MatchString(string(content)) {
-					l.Printf(BrightRed+"Skip HTML: %s"+Reset+NL, fileURL)
+					l.Printf(BrightRed+"Skip HTML: %s"+Reset+EOL, fileURL)
 					return
 				}
 				mu.Lock()
@@ -185,40 +196,42 @@ func main() {
 				mu.Unlock()
 				outputPath := filepath.Join(conf.OutputDir, resp.Request.URL.Hostname())
 				if err := os.MkdirAll(outputPath, 0o755); err != nil && !os.IsExist(err) {
-					l.Printf(BrightRed+"Error creating directory: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Error creating directory: %v"+Reset+EOL, err)
 					return
 				}
 				decodedPath, err := url.PathUnescape(resp.Request.URL.Path)
 				if err != nil {
-					l.Printf(BrightRed+"Error decoding path: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Error decoding path: %v"+Reset+EOL, err)
 					return
 				}
 				filePath := common.SanitizePath(filepath.Join(outputPath, decodedPath))
 				file, err := os.Create(filePath)
 				if err != nil {
-					l.Printf(BrightRed+"Error creating file: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Error creating file: %v"+Reset+EOL, err)
 					return
 				}
 				defer file.Close()
 				if _, err := file.Write(content); err != nil {
-					l.Printf(BrightRed+"Error writing file: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Error writing file: %v"+Reset+EOL, err)
 					return
 				}
 				_, err = io.Copy(file, resp.Body)
 				if err != nil {
-					l.Printf(BrightRed+"Error saving remaining response body: %v"+Reset+NL, err)
+					l.Printf(BrightRed+"Error saving remaining response body: %v"+Reset+EOL, err)
 				}
-				l.Printf(BrightGreen+"Saved: %s"+Reset+NL, filePath)
-				atomic.AddInt64(&savedCount, 1)
+				l.Printf(BrightGreen+"Saved: %s"+Reset+EOL, filePath)
+				atomic.AddInt64(&counter, 1)
 			}(fileURL)
 		}
 	}
 	wg.Wait()
 	close(sem)
-	l.Println(BrightGreen + "Scanning finished!" + Reset)
-	// l.Printf(Blue+"Fetched URLs: %d"+Reset+NL, fetchedCount)
-	if savedCount > 0 {
-		l.Printf(BrightGreen+"Saved files: %d"+Reset+NL, savedCount)
+	l.Println("")
+	l.Println(BrightYellow + "Scanning finished!" + Reset)
+	l.Println("")
+	// l.Printf(Blue+"Fetched URLs: %d"+Reset+EOL, fetchedCount)
+	if counter > 0 {
+		l.Printf(BrightGreen+"Saved files: %d"+Reset+EOL, counter)
 	} else {
 		l.Println(BrightRed + "Nothing found ;-(" + Reset)
 	}
@@ -255,8 +268,8 @@ func generateSensitiveFiles(domainName string) []string {
 			".zsh_history",
 			".zshrc",
 			// На всякий случай проверим
-			"users.csv",
 			"passwords.csv",
+			"users.csv",
 		},
 		// Бекапы конфигов PHP
 		common.GenerateCombinations([]string{
