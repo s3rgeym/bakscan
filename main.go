@@ -238,9 +238,6 @@ func main() {
 }
 
 func generateSensitiveFiles(domainName string) []string {
-	stageSuffixes := []string{"", ".prod", ".dev"}
-	dockerPrefixes := []string{"", "docker/"}
-
 	siteBackupNames := []string{
 		"archive", "backup", "docroot", "files", "home", "httpdocs", "public_html", "root", "site", "web", "www", domainName,
 	}
@@ -252,6 +249,8 @@ func generateSensitiveFiles(domainName string) []string {
 		"app/etc/env.php", "bitrix/php_interface/dbconn.php", "config.local.php", "config.php", "config/settings.inc.php",
 		"configuration.php", "database.php", "settings.php", "sites/default/settings.php", "wp-config.php",
 	}
+	stageSuffixes := []string{"", ".prod", ".dev"}
+	dockerPrefixes := []string{"", "docker/"}
 	dockerFiles := []string{"Dockerfile", ".env"}
 	dockerComposeFiles := []string{"docker-compose"}
 	deployFiles := []string{
