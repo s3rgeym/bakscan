@@ -92,6 +92,7 @@ type Config struct {
 	TotalTimeout      time.Duration
 	Delay             time.Duration
 	SkipVerify        bool
+	UserAgent         string
 	ProxyURL          string
 }
 
@@ -105,6 +106,7 @@ func parseFlags() *Config {
 	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
 	flag.DurationVar(&c.Delay, "d", 20*time.Millisecond, "Delay beetween requests")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
+	flag.StringVar(&c.UserAgent, "ua", "", "Custom User-Agent")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
 	return c
@@ -159,15 +161,18 @@ func main() {
 			// Nginx и прочие сервера как правило учитывают лишь время начала запроса при ограничении их количества в период времени
 			// Должен быть вне горутины или
 			<-rateLimiter.C // Ожидаем следующего запроса
-			go func(fileURL string) {
+			go func(fileURL, userAgent string) {
 				defer func() {
 					wg.Done()
 					<-sem
 				}()
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
-				l.Printf(BrightWhite+"[%s] Try to download file: %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL)
-				filePath, err := download(ctx, client, fileURL, conf.OutputDir)
+				if userAgent == "" {
+					userAgent = common.GenerateRandomUserAgent()
+				}
+				l.Printf(BrightWhite+"[%s] Try to download %s with User-Agent: %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
+				filePath, err := download(ctx, client, fileURL, userAgent, conf.OutputDir)
 				if err != nil {
 					switch {
 					case errors.Is(err, invalidStatusError):
@@ -186,7 +191,7 @@ func main() {
 				mu.Unlock()
 				l.Printf(BrightGreen+"Saved: %s"+Reset+EOL, filePath)
 				atomic.AddInt64(&counter, 1)
-			}(fileURL)
+			}(fileURL, conf.UserAgent)
 		}
 	}
 	wg.Wait()
@@ -201,8 +206,7 @@ func main() {
 	}
 }
 
-func download(ctx context.Context, client *http.Client, fileURL, outputDir string) (string, error) {
-	userAgent := common.GenerateRandomUserAgent()
+func download(ctx context.Context, client *http.Client, fileURL, userAgent, outputDir string) (string, error) {
 	resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 	if err != nil {
 		return "", fmt.Errorf("fetch error: %w", err)
