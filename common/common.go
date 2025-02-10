@@ -182,3 +182,9 @@ func GetEOL() string {
 	}
 	return "\n"
 }
+
+func Shuffle(arr []string) {
+	rand.Shuffle(len(arr), func(i, j int) {
+		arr[i], arr[j] = arr[j], arr[i]
+	})
+}

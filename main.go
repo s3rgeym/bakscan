@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -76,7 +77,10 @@ const (
 var (
 	EOL = common.GetEOL()
 	// Иногда в ответе бывают редиректы, состоящие из одного тега meta либо script
-	htmlRegexp = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
+	htmlRegexp         = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
+	invalidStatusError = errors.New("invalid status code")
+	fileIsHTMLError    = errors.New("file contains HTML")
+	tooSmallError      = errors.New("file too small")
 )
 
 type Config struct {
@@ -126,15 +130,12 @@ func main() {
 	rateLimiter := time.NewTicker(conf.Delay)
 	defer rateLimiter.Stop()
 	var counter int64
-	banner := []string{
-		"______       _    _____                 ",
-		"| ___ \\     | |  /  ___|                ",
-		"| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ",
-		"| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ",
-		"| |_/ | (_| |   </\\__/ | (_| (_| | | | |",
-		"\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|",
-	}
-	l.Println(BrightBlue + strings.Join(banner, EOL) + Reset)
+	l.Println(BrightBlue + "______       _    _____                 " + Reset)
+	l.Println(BrightBlue + "| ___ \\     | |  /  ___|                " + Reset)
+	l.Println(BrightBlue + "| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  " + Reset)
+	l.Println(BrightBlue + "| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ " + Reset)
+	l.Println(BrightBlue + "| |_/ | (_| |   </\\__/ | (_| (_| | | | |" + Reset)
+	l.Println(BrightBlue + "\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|" + Reset)
 	l.Println("")
 	l.Println(BrightYellow + "Starting scanning..." + Reset)
 	l.Println("")
@@ -145,6 +146,7 @@ func main() {
 			continue
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
+		common.Shuffle(sensitiveFiles)
 		l.Printf(BrightCyan+"Checking %d sensitive files on the site %s"+Reset+EOL, len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
@@ -164,61 +166,27 @@ func main() {
 				}()
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
-				userAgent := common.GenerateRandomUserAgent()
-				l.Printf(BrightWhite+"[%s] Fetching: %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
-				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
+				l.Printf(BrightWhite+"[%s] Try to download file: %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL)
+
+				filePath, err := download(ctx, client, fileURL, conf.OutputDir)
 				if err != nil {
-					l.Printf(BrightRed+"Fetch error: %v"+Reset+EOL, err)
+					switch {
+					case errors.Is(err, invalidStatusError):
+						l.Printf(BrightYellow+"Skipping file (invalid status): %s => %v"+Reset+EOL, fileURL, err)
+					case errors.Is(err, fileIsHTMLError):
+						l.Printf(BrightYellow+"Skipping file (contains HTML): %s => %v"+Reset+EOL, fileURL, err)
+					case errors.Is(err, tooSmallError):
+						l.Printf(BrightYellow+"Skipping file (too small): %s => %v"+Reset+EOL, fileURL, err)
+					default:
+						l.Printf(BrightRed+"Download error: %s => %v"+Reset+EOL, fileURL, err)
+					}
 					return
 				}
-				defer resp.Body.Close()
-				if resp.StatusCode != http.StatusOK {
-					l.Printf(BrightRed+"%d - %s"+Reset+EOL, resp.StatusCode, fileURL)
-					return
-				}
-				buf := make([]byte, 4096)
-				readBytes, err := resp.Body.Read(buf)
-				if err != nil && err != io.EOF {
-					l.Printf(BrightRed+"Reading error: %v"+Reset+EOL, err)
-					return
-				}
-				if readBytes <= 100 {
-					l.Printf(BrightRed+"Skip small or empty file: %s"+Reset+EOL, fileURL)
-					return
-				}
-				content := buf[:readBytes]
-				if htmlRegexp.MatchString(string(content)) {
-					l.Printf(BrightRed+"Skip HTML: %s"+Reset+EOL, fileURL)
-					return
-				}
+
 				mu.Lock()
 				fmt.Println(fileURL)
 				mu.Unlock()
-				outputPath := filepath.Join(conf.OutputDir, resp.Request.URL.Hostname())
-				if err := os.MkdirAll(outputPath, 0o755); err != nil && !os.IsExist(err) {
-					l.Printf(BrightRed+"Error creating directory: %v"+Reset+EOL, err)
-					return
-				}
-				decodedPath, err := url.PathUnescape(resp.Request.URL.Path)
-				if err != nil {
-					l.Printf(BrightRed+"Error decoding path: %v"+Reset+EOL, err)
-					return
-				}
-				filePath := common.SanitizePath(filepath.Join(outputPath, decodedPath))
-				file, err := os.Create(filePath)
-				if err != nil {
-					l.Printf(BrightRed+"Error creating file: %v"+Reset+EOL, err)
-					return
-				}
-				defer file.Close()
-				if _, err := file.Write(content); err != nil {
-					l.Printf(BrightRed+"Error writing file: %v"+Reset+EOL, err)
-					return
-				}
-				_, err = io.Copy(file, resp.Body)
-				if err != nil {
-					l.Printf(BrightRed+"Error saving remaining response body: %v"+Reset+EOL, err)
-				}
+
 				l.Printf(BrightGreen+"Saved: %s"+Reset+EOL, filePath)
 				atomic.AddInt64(&counter, 1)
 			}(fileURL)
@@ -237,46 +205,189 @@ func main() {
 	}
 }
 
-func generateSensitiveFiles(domainName string) []string {
-	siteBackupNames := []string{
-		"archive", "backup", "docroot", "files", "home", "httpdocs", "public_html", "root", "site", "web", "www", domainName,
+func download(ctx context.Context, client *http.Client, fileURL, outputDir string) (string, error) {
+	userAgent := common.GenerateRandomUserAgent()
+	resp, err := common.Fetch(ctx, client, fileURL, userAgent)
+	if err != nil {
+		return "", fmt.Errorf("fetch error: %w", err)
 	}
-	dbBackupNames := []string{
-		"backup", "database", "db_dump", "db_export", "db", "dump", domainName,
-	}
-	mongoBackupNames := []string{"backup", "dump"}
-	phpConfigFiles := []string{
-		"app/etc/env.php", "bitrix/php_interface/dbconn.php", "config.local.php", "config.php", "config/settings.inc.php",
-		"configuration.php", "database.php", "settings.php", "sites/default/settings.php", "wp-config.php",
-	}
-	stageSuffixes := []string{"", ".prod", ".dev"}
-	dockerPrefixes := []string{"", "docker/"}
-	dockerFiles := []string{"Dockerfile", ".env"}
-	dockerComposeFiles := []string{"docker-compose"}
-	deployFiles := []string{
-		"deploy.sh", "Jenkinsfile", ".gitlab-ci.yml", ".github/workflows/deploy.yml", "bitbucket-pipelines.yml",
-		".circleci/config.yml", ".travis.yml", ".drone.yml",
-	}
-	commonSensitiveFiles := []string{
-		".aws/credentials", ".bash_history", ".bashrc", ".config/gcloud/credentials.db",
-		".config/gcloud/credentials.json", ".config/openvpn/auth.txt", ".DS_Store", ".git-credentials", ".git/config", ".gitconfig",
-		".gitignore", ".idea/dataSources.local.xml", ".idea/dataSources.xml", ".idea/workspace.xml", ".netrc", ".pgpass",
-		".python_history", ".ssh/authorized_keys", ".ssh/id_rsa", ".ssh/known_hosts", ".vscode/sftp.json", ".zsh_history", ".zshrc",
-		"passwords.csv", "users.csv",
-	}
-	logPrefixes := []string{"", "logs/"}
-	logFiles := []string{"error", "debug"}
-	logExtensions := []string{".log", "_log"}
+	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", invalidStatusError
+	}
+
+	// const maxFileSize = 10 * 1024 * 1024
+	// contentLength, err := strconv.Atoi(resp.Header.Get("Content-Length"))
+	// if err == nil && contentLength > maxFileSize {
+	// 	return "", fileTooLargeError
+	// }
+
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return "", fmt.Errorf("error directory: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(outputDir, "download-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("error creating temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error saving response body: %w", err)
+	}
+
+	fileInfo, err := tmpFile.Stat()
+	if err != nil {
+		return "", fmt.Errorf("error getting file info: %w", err)
+	}
+	if fileInfo.Size() <= 100 {
+		return "", tooSmallError
+	}
+
+	_, err = tmpFile.Seek(0, io.SeekStart)
+	if err != nil {
+		return "", fmt.Errorf("error seeking file: %w", err)
+	}
+
+	buf := make([]byte, 4096)
+	n, err := tmpFile.Read(buf)
+	if err != nil {
+		return "", fmt.Errorf("error reading file: %w", err)
+	}
+
+	if htmlRegexp.Match(buf[:n]) {
+		return "", fileIsHTMLError
+	}
+
+	outputPath := filepath.Join(outputDir, resp.Request.URL.Hostname())
+	if err := os.MkdirAll(outputPath, 0o755); err != nil {
+		return "", fmt.Errorf("error directory: %w", err)
+	}
+
+	decodedPath, err := url.PathUnescape(resp.Request.URL.Path)
+	if err != nil {
+		return "", fmt.Errorf("error decoding path: %w", err)
+	}
+
+	finalFilePath := common.SanitizePath(filepath.Join(outputPath, decodedPath))
+	if err := os.Rename(tmpFile.Name(), finalFilePath); err != nil {
+		return "", fmt.Errorf("error moving file: %w", err)
+	}
+
+	return finalFilePath, nil
+}
+
+func generateSensitiveFiles(domainName string) []string {
+	siteBackups := common.GenerateCombinations(
+		[]string{
+			"archive",
+			"backup",
+			"docroot",
+			"files",
+			"home",
+			"httpdocs",
+			"public_html",
+			"root",
+			"site",
+			"web",
+			"www",
+			domainName,
+		},
+		[]string{".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".zip", ".rar"},
+	)
+	sqlBackups := common.GenerateCombinations(
+		[]string{
+			"backup",
+			"database",
+			"db_dump",
+			"db_export",
+			"db",
+			"dump",
+			domainName,
+		},
+		[]string{".sql"},
+	)
+	mongoBackups := common.GenerateCombinations(
+		[]string{"backup", "dump"},
+		[]string{"/admin/system.users.bson"},
+	)
+	phpConfigBackups := common.GenerateCombinations(
+		[]string{
+			"app/etc/env.php",
+			"bitrix/php_interface/dbconn.php",
+			"config.local.php",
+			"config.php",
+			"config/settings.inc.php",
+			"configuration.php",
+			"database.php",
+			"settings.php",
+			"sites/default/settings.php",
+			"wp-config.php",
+		},
+		[]string{".bak", ".1", ".old", ".swp", "~"},
+	)
+	dockerPrefixes := []string{"", "docker/"}
+	stageSuffixes := []string{"", ".prod", ".dev"}
+	dockerFiles := common.GenerateCombinations(dockerPrefixes, []string{"Dockerfile", ".env"}, stageSuffixes)
+	dockerComposeFiles := common.GenerateCombinations(
+		dockerPrefixes,
+		[]string{"docker-compose"},
+		stageSuffixes,
+		[]string{".yml", ".yaml"},
+	)
+	otherDeployFiles := []string{
+		".circleci/config.yml",
+		".drone.yml",
+		".github/workflows/deploy.yml",
+		".gitlab-ci.yml",
+		".travis.yml",
+		"bitbucket-pipelines.yml",
+		"deploy.sh",
+		"Jenkinsfile",
+	}
+	logFiles := common.GenerateCombinations(
+		[]string{"", "logs/"},
+		[]string{"error", "debug"},
+		[]string{".log", "_log"},
+	)
+	miscFiles := []string{
+		".aws/credentials",
+		".bash_history",
+		".bashrc",
+		".config/gcloud/credentials.db",
+		".config/gcloud/credentials.json",
+		".config/openvpn/auth.txt",
+		".DS_Store",
+		".git-credentials",
+		".git/config",
+		".gitconfig",
+		".gitignore",
+		".idea/dataSources.local.xml",
+		".idea/dataSources.xml",
+		".idea/workspace.xml",
+		".netrc",
+		".pgpass",
+		".python_history",
+		".ssh/authorized_keys",
+		".ssh/id_rsa",
+		".ssh/known_hosts",
+		".vscode/sftp.json",
+		".zsh_history",
+		".zshrc",
+		"passwords.csv",
+		"users.csv",
+	}
 	return common.Extend(
-		common.GenerateCombinations(siteBackupNames, []string{".rar", ".tar.gz", ".tgz", ".zip"}),
-		common.GenerateCombinations(dbBackupNames, []string{".sql"}),
-		common.GenerateCombinations(mongoBackupNames, []string{"/admin/system.users.bson"}),
-		common.GenerateCombinations(phpConfigFiles, []string{".bak", ".1", ".old", ".swp", "~"}),
-		common.GenerateCombinations(dockerPrefixes, dockerFiles, stageSuffixes),
-		common.GenerateCombinations(dockerPrefixes, dockerComposeFiles, stageSuffixes, []string{".yml", ".yaml"}),
-		deployFiles,
-		commonSensitiveFiles,
-		common.GenerateCombinations(logPrefixes, logFiles, logExtensions),
+		siteBackups,
+		sqlBackups,
+		mongoBackups,
+		phpConfigBackups,
+		dockerFiles,
+		dockerComposeFiles,
+		otherDeployFiles,
+		logFiles,
+		miscFiles,
 	)
 }
