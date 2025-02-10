@@ -106,7 +106,7 @@ func parseFlags() *Config {
 	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
 	flag.DurationVar(&c.Delay, "d", 20*time.Millisecond, "Delay beetween requests")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
-	flag.StringVar(&c.UserAgent, "ua", "", "Custom User-Agent, eg \"Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.69 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)\"")
+	flag.StringVar(&c.UserAgent, "ua", "", "Custom User-Agent, e.g. \"Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0\"")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
 	return c
