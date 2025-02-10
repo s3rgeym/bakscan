@@ -99,7 +99,7 @@ func parseFlags() *Config {
 	flag.DurationVar(&c.ConnectTimeout, "сt", 10*time.Second, "Connect timeout")
 	flag.DurationVar(&c.ReadHeaderTimeout, "rht", 5*time.Second, "Read header timeout")
 	flag.DurationVar(&c.TotalTimeout, "tt", 60*time.Second, "Timeout for entire request")
-	flag.DurationVar(&c.Delay, "d", 50*time.Millisecond, "Delay beetween requests")
+	flag.DurationVar(&c.Delay, "d", 20*time.Millisecond, "Delay beetween requests")
 	flag.BoolVar(&c.SkipVerify, "k", false, "Skip SSL verification")
 	flag.StringVar(&c.ProxyURL, "p", "", "Proxy URL")
 	flag.Parse()
@@ -165,7 +165,7 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
 				userAgent := common.GenerateRandomUserAgent()
-				l.Printf(BrightWhite+"[%s] %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
+				l.Printf(BrightWhite+"[%s] Start fetching: %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
 				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
 					l.Printf(BrightRed+"Fetch error: %v"+Reset+EOL, err)
