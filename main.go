@@ -285,6 +285,7 @@ func generateSensitiveFiles(domainName string) []string {
 			"home",
 			"html",
 			"httpdocs",
+			"old",
 			"public_html",
 			"root",
 			"site",
