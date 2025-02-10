@@ -165,7 +165,7 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
 				userAgent := common.GenerateRandomUserAgent()
-				l.Printf(BrightWhite+"[%s] Start fetching: %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
+				l.Printf(BrightWhite+"[%s] Fetching: %s => %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
 				resp, err := common.Fetch(ctx, client, fileURL, userAgent)
 				if err != nil {
 					l.Printf(BrightRed+"Fetch error: %v"+Reset+EOL, err)
@@ -182,8 +182,8 @@ func main() {
 					l.Printf(BrightRed+"Reading error: %v"+Reset+EOL, err)
 					return
 				}
-				if readBytes == 0 {
-					l.Printf(BrightRed+"Skip empty: %s"+Reset+EOL, fileURL)
+				if readBytes <= 100 {
+					l.Printf(BrightRed+"Skip small or empty file: %s"+Reset+EOL, fileURL)
 					return
 				}
 				content := buf[:readBytes]
@@ -240,84 +240,44 @@ func main() {
 func generateSensitiveFiles(domainName string) []string {
 	stageSuffixes := []string{"", ".prod", ".dev"}
 	dockerPrefixes := []string{"", "docker/"}
+
+	siteBackupNames := []string{
+		"archive", "backup", "docroot", "files", "home", "httpdocs", "public_html", "root", "site", "web", "www", domainName,
+	}
+	dbBackupNames := []string{
+		"backup", "database", "db_dump", "db_export", "db", "dump", domainName,
+	}
+	mongoBackupNames := []string{"backup", "dump"}
+	phpConfigFiles := []string{
+		"app/etc/env.php", "bitrix/php_interface/dbconn.php", "config.local.php", "config.php", "config/settings.inc.php",
+		"configuration.php", "database.php", "settings.php", "sites/default/settings.php", "wp-config.php",
+	}
+	dockerFiles := []string{"Dockerfile", ".env"}
+	dockerComposeFiles := []string{"docker-compose"}
+	deployFiles := []string{
+		"deploy.sh", "Jenkinsfile", ".gitlab-ci.yml", ".github/workflows/deploy.yml", "bitbucket-pipelines.yml",
+		".circleci/config.yml", ".travis.yml", ".drone.yml",
+	}
+	commonSensitiveFiles := []string{
+		".aws/credentials", ".bash_history", ".bashrc", ".config/gcloud/credentials.db",
+		".config/gcloud/credentials.json", ".config/openvpn/auth.txt", ".DS_Store", ".git-credentials", ".git/config", ".gitconfig",
+		".gitignore", ".idea/dataSources.local.xml", ".idea/dataSources.xml", ".idea/workspace.xml", ".netrc", ".pgpass",
+		".python_history", ".ssh/authorized_keys", ".ssh/id_rsa", ".ssh/known_hosts", ".vscode/sftp.json", ".zsh_history", ".zshrc",
+		"passwords.csv", "users.csv",
+	}
+	logPrefixes := []string{"", "logs/"}
+	logFiles := []string{"error", "debug"}
+	logExtensions := []string{".log", "_log"}
+
 	return common.Extend(
-		// Общие файлы
-		[]string{
-			".aws/credentials",
-			".bash_history",
-			".bashrc",
-			".config/gcloud/credentials.db",
-			".config/gcloud/credentials.json",
-			".config/openvpn/auth.txt",
-			".DS_Store",
-			".git-credentials",
-			".git/config",
-			".gitconfig",
-			".gitignore",
-			// В этих конфигах IDEA могут быть креды от баз
-			".idea/dataSources.local.xml",
-			".idea/dataSources.xml",
-			".idea/workspace.xml",
-			".netrc",
-			".pgpass",
-			".python_history",
-			".ssh/authorized_keys",
-			".ssh/id_rsa",
-			".ssh/known_hosts",
-			".vscode/sftp.json",
-			".zsh_history",
-			".zshrc",
-			// На всякий случай проверим
-			"passwords.csv",
-			"users.csv",
-		},
-		// Бекапы конфигов PHP
-		common.GenerateCombinations([]string{
-			"app/etc/env.php",
-			"bitrix/php_interface/dbconn.php",
-			"config.local.php",
-			"config.php",
-			"config/settings.inc.php",
-			"configuration.php",
-			"database.php",
-			"settings.php",
-			"sites/default/settings.php",
-			"wp-config.php",
-		}, []string{".bak", ".1", ".old", ".swp", "~"}),
-		// Бекапы всего сайта
-		common.GenerateCombinations([]string{
-			"archive",
-			"backup",
-			"docroot",
-			"files",
-			"home",
-			"httpdocs",
-			"public_html",
-			"root",
-			"site",
-			"web",
-			"www",
-			domainName,
-		}, []string{".rar", ".tar.gz", ".tgz", ".zip"}),
-		// Бекапы SQL-баз
-		common.GenerateCombinations([]string{
-			"backup",
-			"database",
-			"db_dump",
-			"db_export",
-			"db",
-			"dump",
-			domainName,
-		}, []string{".sql"}),
-		// Бекапы MongoDB
-		common.GenerateCombinations([]string{
-			"backup",
-			"dump",
-		}, []string{"/admin/system.users.bson"}),
-		// Файлы докера
-		common.GenerateCombinations(dockerPrefixes, []string{"Dockerfile", ".env"}, stageSuffixes),
-		common.GenerateCombinations(dockerPrefixes, []string{"docker-compose"}, stageSuffixes, []string{".yml", ".yaml"}),
-		// Логи, содержащие ошибки или отладочную информацию
-		common.GenerateCombinations([]string{"", "logs/"}, []string{"error", "debug"}, []string{".log", "_log"}),
+		common.GenerateCombinations(siteBackupNames, []string{".rar", ".tar.gz", ".tgz", ".zip"}),
+		common.GenerateCombinations(dbBackupNames, []string{".sql"}),
+		common.GenerateCombinations(mongoBackupNames, []string{"/admin/system.users.bson"}),
+		common.GenerateCombinations(phpConfigFiles, []string{".bak", ".1", ".old", ".swp", "~"}),
+		common.GenerateCombinations(dockerPrefixes, dockerFiles, stageSuffixes),
+		common.GenerateCombinations(dockerPrefixes, dockerComposeFiles, stageSuffixes, []string{".yml", ".yaml"}),
+		deployFiles,
+		commonSensitiveFiles,
+		common.GenerateCombinations(logPrefixes, logFiles, logExtensions),
 	)
 }
