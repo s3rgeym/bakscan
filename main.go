@@ -137,7 +137,7 @@ func main() {
 	l.Println(BrightBlue + "| |_/ | (_| |   </\\__/ | (_| (_| | | | |" + Reset)
 	l.Println(BrightBlue + "\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|" + Reset)
 	l.Println("")
-	l.Println(BrightYellow + "Starting scanning..." + Reset)
+	l.Println(BrightBlue + "Starting scanning..." + Reset)
 	l.Println("")
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
@@ -147,7 +147,7 @@ func main() {
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
 		common.Shuffle(sensitiveFiles)
-		l.Printf(BrightCyan+"Checking %d sensitive files on the site %s"+Reset+EOL, len(sensitiveFiles), u)
+		l.Printf(BrightBlue+"Checking %d sensitive files on the site %s"+Reset+EOL, len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
@@ -195,7 +195,7 @@ func main() {
 	wg.Wait()
 	close(sem)
 	l.Println("")
-	l.Println(BrightYellow + "Scanning finished!" + Reset)
+	l.Println(BrightBlue + "Scanning finished!" + Reset)
 	l.Println("")
 	// l.Printf(Blue+"Fetched URLs: %d"+Reset+EOL, fetchedCount)
 	if counter > 0 {
