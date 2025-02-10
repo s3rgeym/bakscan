@@ -167,7 +167,6 @@ func main() {
 				ctx, cancel := context.WithTimeout(context.Background(), conf.TotalTimeout)
 				defer cancel()
 				l.Printf(BrightWhite+"[%s] Try to download file: %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL)
-
 				filePath, err := download(ctx, client, fileURL, conf.OutputDir)
 				if err != nil {
 					switch {
@@ -182,11 +181,9 @@ func main() {
 					}
 					return
 				}
-
 				mu.Lock()
 				fmt.Println(fileURL)
 				mu.Unlock()
-
 				l.Printf(BrightGreen+"Saved: %s"+Reset+EOL, filePath)
 				atomic.AddInt64(&counter, 1)
 			}(fileURL)
@@ -197,7 +194,6 @@ func main() {
 	l.Println("")
 	l.Println(BrightBlue + "Scanning finished!" + Reset)
 	l.Println("")
-	// l.Printf(Blue+"Fetched URLs: %d"+Reset+EOL, fetchedCount)
 	if counter > 0 {
 		l.Printf(BrightGreen+"Saved files: %d"+Reset+EOL, counter)
 	} else {
@@ -287,6 +283,7 @@ func generateSensitiveFiles(domainName string) []string {
 			"docroot",
 			"files",
 			"home",
+			"html",
 			"httpdocs",
 			"public_html",
 			"root",
