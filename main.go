@@ -22,8 +22,7 @@ import (
 )
 
 var (
-	// Иногда в ответе бывают редиректы, состоящие из одного тега meta либо script
-	htmlRegexp         = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
+	htmlRegexp         = regexp.MustCompile(`<(?i:\!doctype|html)[^>]*>`)
 	invalidStatusError = errors.New("invalid status code")
 	fileIsHTMLError    = errors.New("file contains HTML")
 	tooSmallError      = errors.New("file too small")
