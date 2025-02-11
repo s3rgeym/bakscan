@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"bakscan/common"
-	"bakscan/log"
+	"bakscan/logger"
 )
 
 var (
@@ -62,14 +62,14 @@ func main() {
 	conf := parseFlags()
 	urls, err := common.ReadLines(conf.InputFile)
 	if err != nil {
-		log.Fatal("Error read URLs: %v", err)
+		logger.Fatal("Error read URLs: %v", err)
 	}
 	if len(urls) == 0 {
-		log.Fatal("Nothing to scan.")
+		logger.Fatal("Nothing to scan.")
 	}
 	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.ReadHeaderTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
-		log.Fatal("Failed to create HTTP client: %v", err)
+		logger.Fatal("Failed to create HTTP client: %v", err)
 	}
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
@@ -77,26 +77,26 @@ func main() {
 	rateLimiter := time.NewTicker(conf.Delay)
 	defer rateLimiter.Stop()
 	var counter int64
-	log.Info("______       _    _____                 ")
-	log.Info("| ___ \\     | |  /  ___|                ")
-	log.Info("| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ")
-	log.Info("| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ")
-	log.Info("| |_/ | (_| |   </\\__/ | (_| (_| | | | |")
-	log.Info("\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|")
-	log.Info("Starting scanning...")
+	logger.Info("______       _    _____                 ")
+	logger.Info("| ___ \\     | |  /  ___|                ")
+	logger.Info("| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ")
+	logger.Info("| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ")
+	logger.Info("| |_/ | (_| |   </\\__/ | (_| (_| | | | |")
+	logger.Info("\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|")
+	logger.Info("Starting scanning...")
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
 		if err != nil {
-			log.Error("Error parsing URL %q: %v", urlStr, err)
+			logger.Error("Error parsing URL %q: %v", urlStr, err)
 			continue
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
 		common.Shuffle(sensitiveFiles)
-		log.Info("Checking %d sensitive files on the site %s", len(sensitiveFiles), u)
+		logger.Info("Checking %d sensitive files on the site %s", len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
-				log.Error("Error joining URL: %v", err)
+				logger.Error("Error joining URL: %v", err)
 				continue
 			}
 			wg.Add(1)
@@ -114,36 +114,36 @@ func main() {
 				if userAgent == "" {
 					userAgent = common.GenerateRandomUserAgent()
 				}
-				log.Log("Try to download %s with User-Agent: %s", fileURL, userAgent)
+				logger.Log("Try to download %s with User-Agent: %s", fileURL, userAgent)
 				filePath, err := download(ctx, client, fileURL, userAgent, conf.OutputDir)
 				if err != nil {
 					switch {
 					case errors.Is(err, invalidStatusError):
-						log.Warn("Skipping file (invalid status): %s => %v", fileURL, err)
+						logger.Warn("Skipping file (invalid status): %s => %v", fileURL, err)
 					case errors.Is(err, fileIsHTMLError):
-						log.Warn("Skipping file (contains HTML): %s => %v", fileURL, err)
+						logger.Warn("Skipping file (contains HTML): %s => %v", fileURL, err)
 					case errors.Is(err, tooSmallError):
-						log.Warn("Skipping file (too small): %s => %v", fileURL, err)
+						logger.Warn("Skipping file (too small): %s => %v", fileURL, err)
 					default:
-						log.Warn("Download error: %s => %v", fileURL, err)
+						logger.Warn("Download error: %s => %v", fileURL, err)
 					}
 					return
 				}
 				mu.Lock()
 				fmt.Println(fileURL)
 				mu.Unlock()
-				log.Success("Saved: %s", filePath)
+				logger.Success("Saved: %s", filePath)
 				atomic.AddInt64(&counter, 1)
 			}(fileURL, conf.UserAgent)
 		}
 	}
 	wg.Wait()
 	close(sem)
-	log.Info("Scanning finished!")
+	logger.Info("Scanning finished!")
 	if counter > 0 {
-		log.Success("Saved files: %d", counter)
+		logger.Success("Saved files: %d", counter)
 	} else {
-		log.Error("Nothing found ;-(")
+		logger.Error("Nothing found ;-(")
 	}
 }
 
