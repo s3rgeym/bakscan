@@ -328,7 +328,7 @@ func generateSensitiveFiles(domainName string) []string {
 			"sites/default/settings.php",
 			"wp-config.php",
 		},
-		[]string{".bak", ".1", ".old", ".swp", "~"},
+		[]string{".bak", ".bk", ".old", ".swp", "~"},
 	)
 	dockerPrefixes := []string{"", "docker/"}
 	stageSuffixes := []string{"", ".prod", ".dev"}
@@ -354,7 +354,7 @@ func generateSensitiveFiles(domainName string) []string {
 		[]string{"error", "debug"},
 		[]string{".log", "_log"},
 	)
-	miscFiles := []string{
+	homeFiles := []string{
 		".aws/credentials",
 		".bash_history",
 		".bashrc",
@@ -373,12 +373,22 @@ func generateSensitiveFiles(domainName string) []string {
 		".pgpass",
 		".python_history",
 		".ssh/authorized_keys",
+		".ssh/id_ed25519",
 		".ssh/id_rsa",
 		".ssh/known_hosts",
 		".vscode/sftp.json",
 		".zsh_history",
 		".zshrc",
+		".kube/config",
+	}
+	miscFiles := []string{
+		"config.json",
+		"config.xml",
+		"config.yaml",
+		"config.yml",
+		"includes/database/database.inc", // конфиг drupal до D7, который может быть доступен из-за неправильной настройки сервера
 		"passwords.csv",
+		"user_secrets.yml", // Конфиг от open stack хранится в /etc обычно, но чем черт не шутит
 		"users.csv",
 	}
 	return common.Extend(
@@ -390,6 +400,7 @@ func generateSensitiveFiles(domainName string) []string {
 		dockerComposeFiles,
 		otherDeployFiles,
 		logFiles,
+		homeFiles,
 		miscFiles,
 	)
 }
