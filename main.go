@@ -365,7 +365,6 @@ func generateSensitiveFiles(domainName string) []string {
 		".git-credentials",
 		".git/config",
 		".gitconfig",
-		".gitignore",
 		".idea/dataSources.local.xml",
 		".idea/dataSources.xml",
 		".idea/workspace.xml",
@@ -390,6 +389,7 @@ func generateSensitiveFiles(domainName string) []string {
 		"passwords.csv",
 		"user_secrets.yml", // Конфиг от open stack хранится в /etc обычно, но чем черт не шутит
 		"users.csv",
+		".gitignore", // может содержать путь до бекапов
 	}
 	return common.Extend(
 		siteBackups,
