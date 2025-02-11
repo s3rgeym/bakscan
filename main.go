@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"bakscan/common"
-	"bakscan/logger"
+	"bakscan/console"
 )
 
 var (
@@ -62,14 +62,14 @@ func main() {
 	conf := parseFlags()
 	urls, err := common.ReadLines(conf.InputFile)
 	if err != nil {
-		logger.Fatal("Error read URLs: %v", err)
+		console.Fatal("Error read URLs: %v", err)
 	}
 	if len(urls) == 0 {
-		logger.Fatal("Nothing to scan.")
+		console.Fatal("Nothing to scan.")
 	}
 	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.ReadHeaderTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
-		logger.Fatal("Failed to create HTTP client: %v", err)
+		console.Fatal("Failed to create HTTP client: %v", err)
 	}
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
@@ -77,26 +77,26 @@ func main() {
 	rateLimiter := time.NewTicker(conf.Delay)
 	defer rateLimiter.Stop()
 	var counter int64
-	logger.Info("______       _    _____                 ")
-	logger.Info("| ___ \\     | |  /  ___|                ")
-	logger.Info("| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ")
-	logger.Info("| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ")
-	logger.Info("| |_/ | (_| |   </\\__/ | (_| (_| | | | |")
-	logger.Info("\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|")
-	logger.Info("Starting scanning...")
+	console.Info("______       _    _____                 ")
+	console.Info("| ___ \\     | |  /  ___|                ")
+	console.Info("| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ")
+	console.Info("| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ")
+	console.Info("| |_/ | (_| |   </\\__/ | (_| (_| | | | |")
+	console.Info("\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|")
+	console.Info("Starting scanning...")
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
 		if err != nil {
-			logger.Error("Error parsing URL %q: %v", urlStr, err)
+			console.Error("Error parsing URL %q: %v", urlStr, err)
 			continue
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
 		common.Shuffle(sensitiveFiles)
-		logger.Info("Checking %d sensitive files on the site %s", len(sensitiveFiles), u)
+		console.Info("Checking %d sensitive files on the site %s", len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
-				logger.Error("Error joining URL: %v", err)
+				console.Error("Error joining URL: %v", err)
 				continue
 			}
 			wg.Add(1)
@@ -114,36 +114,36 @@ func main() {
 				if userAgent == "" {
 					userAgent = common.GenerateRandomUserAgent()
 				}
-				logger.Log("Try to download %s with User-Agent: %s", fileURL, userAgent)
+				console.Log("Try to download %s with User-Agent: %s", fileURL, userAgent)
 				filePath, err := download(ctx, client, fileURL, userAgent, conf.OutputDir)
 				if err != nil {
 					switch {
 					case errors.Is(err, invalidStatusError):
-						logger.Warn("Skipping file (invalid status): %s => %v", fileURL, err)
+						console.Warn("Skipping file (invalid status): %s => %v", fileURL, err)
 					case errors.Is(err, fileIsHTMLError):
-						logger.Warn("Skipping file (contains HTML): %s => %v", fileURL, err)
+						console.Warn("Skipping file (contains HTML): %s => %v", fileURL, err)
 					case errors.Is(err, tooSmallError):
-						logger.Warn("Skipping file (too small): %s => %v", fileURL, err)
+						console.Warn("Skipping file (too small): %s => %v", fileURL, err)
 					default:
-						logger.Warn("Download error: %s => %v", fileURL, err)
+						console.Warn("Download error: %s => %v", fileURL, err)
 					}
 					return
 				}
 				mu.Lock()
 				fmt.Println(fileURL)
 				mu.Unlock()
-				logger.Success("Saved: %s", filePath)
+				console.Success("Saved: %s", filePath)
 				atomic.AddInt64(&counter, 1)
 			}(fileURL, conf.UserAgent)
 		}
 	}
 	wg.Wait()
 	close(sem)
-	logger.Info("Scanning finished!")
+	console.Info("Scanning finished!")
 	if counter > 0 {
-		logger.Success("Saved files: %d", counter)
+		console.Success("Saved files: %d", counter)
 	} else {
-		logger.Error("Nothing found ;-(")
+		console.Error("Nothing found ;-(")
 	}
 }
 
@@ -215,7 +215,7 @@ func download(ctx context.Context, client *http.Client, fileURL, userAgent, outp
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("error creating directories: %w", err)
 	}
-	
+
 	if err := os.Rename(tmpFile.Name(), finalFilePath); err != nil {
 		return "", fmt.Errorf("error moving file: %w", err)
 	}

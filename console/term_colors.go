@@ -1,4 +1,4 @@
-package logger
+package console
 
 const (
 	// Константы для цветов
