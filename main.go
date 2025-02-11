@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,63 +18,10 @@ import (
 	"time"
 
 	"bakscan/common"
-)
-
-const (
-	// Константы для цветов
-	CSI       = "\033["
-	Reset     = CSI + "0m" // Сброс всех стилей
-	Bold      = CSI + "1m" // Жирный текст
-	Dim       = CSI + "2m" // Тусклый текст
-	Italic    = CSI + "3m" // Курсив
-	Underline = CSI + "4m" // Подчеркивание
-	Blink     = CSI + "5m" // Мигающий текст
-	Reverse   = CSI + "7m" // Инверсия цветов
-	Hidden    = CSI + "8m" // Скрытый текст
-
-	// Основные цвета текста
-	Black   = CSI + "30m"
-	Red     = CSI + "31m"
-	Green   = CSI + "32m"
-	Yellow  = CSI + "33m"
-	Blue    = CSI + "34m"
-	Magenta = CSI + "35m"
-	Cyan    = CSI + "36m"
-	White   = CSI + "37m"
-
-	// Яркие цвета текста
-	BrightBlack   = CSI + "90m" // Серый
-	BrightRed     = CSI + "91m"
-	BrightGreen   = CSI + "92m"
-	BrightYellow  = CSI + "93m"
-	BrightBlue    = CSI + "94m"
-	BrightMagenta = CSI + "95m"
-	BrightCyan    = CSI + "96m"
-	BrightWhite   = CSI + "97m"
-
-	// Цвета фона
-	BgBlack   = CSI + "40m"
-	BgRed     = CSI + "41m"
-	BgGreen   = CSI + "42m"
-	BgYellow  = CSI + "43m"
-	BgBlue    = CSI + "44m"
-	BgMagenta = CSI + "45m"
-	BgCyan    = CSI + "46m"
-	BgWhite   = CSI + "47m"
-
-	// Яркие цвета фона
-	BgBrightBlack   = CSI + "100m" // Темно-серый фон
-	BgBrightRed     = CSI + "101m"
-	BgBrightGreen   = CSI + "102m"
-	BgBrightYellow  = CSI + "103m"
-	BgBrightBlue    = CSI + "104m"
-	BgBrightMagenta = CSI + "105m"
-	BgBrightCyan    = CSI + "106m"
-	BgBrightWhite   = CSI + "107m"
+	"bakscan/log"
 )
 
 var (
-	EOL = common.GetEOL()
 	// Иногда в ответе бывают редиректы, состоящие из одного тега meta либо script
 	htmlRegexp         = regexp.MustCompile(`<(?i:html|body|script|meta)[^<>]*>`)
 	invalidStatusError = errors.New("invalid status code")
@@ -114,17 +60,16 @@ func parseFlags() *Config {
 
 func main() {
 	conf := parseFlags()
-	l := log.New(os.Stderr, "", 0)
 	urls, err := common.ReadLines(conf.InputFile)
 	if err != nil {
-		l.Fatal(err)
+		log.Fatal("Error read URLs: %v", err)
 	}
 	if len(urls) == 0 {
-		l.Fatalln(BrightRed+"Nothing to scan."+Reset, err)
+		log.Fatal("Nothing to scan.")
 	}
 	client, err := common.CreateHTTPClient(conf.ConnectTimeout, conf.ReadHeaderTimeout, conf.SkipVerify, conf.ProxyURL)
 	if err != nil {
-		l.Fatalf(BrightRed+"Failed to create HTTP client: %v"+Reset, err)
+		log.Fatal("Failed to create HTTP client: %v", err)
 	}
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, conf.Threads)
@@ -132,28 +77,26 @@ func main() {
 	rateLimiter := time.NewTicker(conf.Delay)
 	defer rateLimiter.Stop()
 	var counter int64
-	l.Println(BrightBlue + "______       _    _____                 " + Reset)
-	l.Println(BrightBlue + "| ___ \\     | |  /  ___|                " + Reset)
-	l.Println(BrightBlue + "| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  " + Reset)
-	l.Println(BrightBlue + "| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ " + Reset)
-	l.Println(BrightBlue + "| |_/ | (_| |   </\\__/ | (_| (_| | | | |" + Reset)
-	l.Println(BrightBlue + "\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|" + Reset)
-	l.Println("")
-	l.Println(BrightBlue + "Starting scanning..." + Reset)
-	l.Println("")
+	log.Info("______       _    _____                 ")
+	log.Info("| ___ \\     | |  /  ___|                ")
+	log.Info("| |_/ / __ _| | _\\ `--.  ___ __ _ _ __  ")
+	log.Info("| ___ \\/ _` | |/ /`--. \\/ __/ _` | '_ \\ ")
+	log.Info("| |_/ | (_| |   </\\__/ | (_| (_| | | | |")
+	log.Info("\\____/ \\__,_|_|\\_\\____/ \\___\\__,_|_| |_|")
+	log.Info("Starting scanning...")
 	for _, urlStr := range urls {
 		u, err := url.Parse(urlStr)
 		if err != nil {
-			l.Printf(BrightRed+"Error parsing URL %q: %v"+Reset, urlStr, err)
+			log.Error("Error parsing URL %q: %v", urlStr, err)
 			continue
 		}
 		sensitiveFiles := generateSensitiveFiles(u.Hostname())
 		common.Shuffle(sensitiveFiles)
-		l.Printf(BrightBlue+"Checking %d sensitive files on the site %s"+Reset+EOL, len(sensitiveFiles), u)
+		log.Info("Checking %d sensitive files on the site %s", len(sensitiveFiles), u)
 		for _, file := range sensitiveFiles {
 			fileURL, err := common.JoinURL(u, "/"+strings.TrimLeft(file, "/"))
 			if err != nil {
-				l.Printf(BrightRed+"Error joining URL: %v"+Reset+EOL, err)
+				log.Error("Error joining URL: %v", err)
 				continue
 			}
 			wg.Add(1)
@@ -171,38 +114,36 @@ func main() {
 				if userAgent == "" {
 					userAgent = common.GenerateRandomUserAgent()
 				}
-				l.Printf(BrightWhite+"[%s] Try to download %s with User-Agent: %s"+Reset+EOL, time.Now().Format("2006-01-02 15:04:05.000000"), fileURL, userAgent)
+				log.Log("Try to download %s with User-Agent: %s", fileURL, userAgent)
 				filePath, err := download(ctx, client, fileURL, userAgent, conf.OutputDir)
 				if err != nil {
 					switch {
 					case errors.Is(err, invalidStatusError):
-						l.Printf(BrightYellow+"Skipping file (invalid status): %s => %v"+Reset+EOL, fileURL, err)
+						log.Warn("Skipping file (invalid status): %s => %v", fileURL, err)
 					case errors.Is(err, fileIsHTMLError):
-						l.Printf(BrightYellow+"Skipping file (contains HTML): %s => %v"+Reset+EOL, fileURL, err)
+						log.Warn("Skipping file (contains HTML): %s => %v", fileURL, err)
 					case errors.Is(err, tooSmallError):
-						l.Printf(BrightYellow+"Skipping file (too small): %s => %v"+Reset+EOL, fileURL, err)
+						log.Warn("Skipping file (too small): %s => %v", fileURL, err)
 					default:
-						l.Printf(BrightRed+"Download error: %s => %v"+Reset+EOL, fileURL, err)
+						log.Warn("Download error: %s => %v", fileURL, err)
 					}
 					return
 				}
 				mu.Lock()
 				fmt.Println(fileURL)
 				mu.Unlock()
-				l.Printf(BrightGreen+"Saved: %s"+Reset+EOL, filePath)
+				log.Success("Saved: %s", filePath)
 				atomic.AddInt64(&counter, 1)
 			}(fileURL, conf.UserAgent)
 		}
 	}
 	wg.Wait()
 	close(sem)
-	l.Println("")
-	l.Println(BrightBlue + "Scanning finished!" + Reset)
-	l.Println("")
+	log.Info("Scanning finished!")
 	if counter > 0 {
-		l.Printf(BrightGreen+"Saved files: %d"+Reset+EOL, counter)
+		log.Success("Saved files: %d", counter)
 	} else {
-		l.Println(BrightRed + "Nothing found ;-(" + Reset)
+		log.Error("Nothing found ;-(")
 	}
 }
 
@@ -240,7 +181,7 @@ func download(ctx context.Context, client *http.Client, fileURL, userAgent, outp
 
 	fileInfo, err := tmpFile.Stat()
 	if err != nil {
-		return "", fmt.Errorf("error getting file info: %w", err)
+		return "", fmt.Errorf("error getting file Info: %w", err)
 	}
 	if fileInfo.Size() <= 100 {
 		return "", tooSmallError

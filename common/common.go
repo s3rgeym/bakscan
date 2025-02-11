@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -176,12 +175,12 @@ func SanitizePath(name string) string {
 	return invalidPathChars.ReplaceAllString(name, "_")
 }
 
-func GetEOL() string {
-	if runtime.GOOS == "windows" {
-		return "\r\n"
-	}
-	return "\n"
-}
+// func GetEOL() string {
+// 	if runtime.GOOS == "windows" {
+// 		return "\r\n"
+// 	}
+// 	return "\n"
+// }
 
 func Shuffle(arr []string) {
 	rand.Shuffle(len(arr), func(i, j int) {
