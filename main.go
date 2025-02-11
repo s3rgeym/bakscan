@@ -203,16 +203,19 @@ func download(ctx context.Context, client *http.Client, fileURL, userAgent, outp
 	}
 
 	outputPath := filepath.Join(outputDir, resp.Request.URL.Hostname())
-	if err := os.MkdirAll(outputPath, 0o755); err != nil {
-		return "", fmt.Errorf("error directory: %w", err)
-	}
-
 	decodedPath, err := url.PathUnescape(resp.Request.URL.Path)
 	if err != nil {
 		return "", fmt.Errorf("error decoding path: %w", err)
 	}
 
 	finalFilePath := common.SanitizePath(filepath.Join(outputPath, decodedPath))
+
+	// Воссоздаем файловую структуру пути до файла на сервере
+	dir := filepath.Dir(finalFilePath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("error creating directories: %w", err)
+	}
+	
 	if err := os.Rename(tmpFile.Name(), finalFilePath); err != nil {
 		return "", fmt.Errorf("error moving file: %w", err)
 	}
