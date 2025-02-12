@@ -115,9 +115,10 @@ func Fetch(ctx context.Context, client *http.Client, url, userAgent string) (*ht
 
 func setDefaultHeaders(req *http.Request) {
 	headers := map[string]string{
-		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
-		"Accept-Language": "en-US,en;q=0.8",
-		"User-Agent":      "Mozilla/5.0",
+		"Accept":                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+		"Accept-Language":           "en-US,en;q=0.8",
+		"User-Agent":                "Mozilla/5.0",
+		"Upgrade-Insecure-Requests": "1",
 	}
 	for key, value := range headers {
 		req.Header.Set(key, value)
