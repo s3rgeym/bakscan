@@ -294,7 +294,8 @@ func generateSensitiveFiles(domainName string) []string {
 	}
 	logFiles := common.GenerateCombinations(
 		[]string{"", "logs/"},
-		[]string{"error", "debug"},
+		// В access.log могут быть ссылки для автологина типа `https://example.com/login?username=admin&password=admin123`
+		[]string{"access", "error", "debug"},
 		[]string{".log", "_log"},
 	)
 	homeFiles := []string{
